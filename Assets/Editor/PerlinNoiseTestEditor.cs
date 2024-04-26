@@ -17,9 +17,9 @@ public class PerlinNoiseTestEditor : Editor
             script.GenerateRandomTexture();
         }
 
-        if (GUILayout.Button("Save Texture"))
+        if (GUILayout.Button("Export Maps"))
         {
-            script.SaveTextureAsPNG();
+            script.ExportMaps();
         }
     }
 }

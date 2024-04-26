@@ -1,72 +1,174 @@
 using System.IO;
 using UnityEngine;
+using UnityEngine.UIElements;
+
+[System.Serializable]
+public struct Tile
+{
+    public MinMaxFloat elevation;
+    public Color color;
+}
+
+public struct MinMaxFloat
+{
+    public float min, max;
+}
 
 public class PerlinNoiseTest : MonoBehaviour
 {
-    public int width = 256; // Width of the texture
-    public int height = 256; // Height of the texture
+    [Header("General")]
+    public int width;
+    public int height;
 
-    public float xOrigin;
-    public float yOrigin;
-    public float x_tOrigin;
-    public float y_tOrigin;
-    public float x_mOrigin;
-    public float y_mOrigin;
+    /*[Header("Color")]
+    public Color grassColor;
+    public Color grassColor;*/
 
-    public float scale = 1.0f;
-    public float scale_t = 1.0f;
-    public float scale_m = 1.0f;
+    [Header("Elevation Map")]
+    public SpriteRenderer elevationMapRenderer;
+    public Vector2 elevationMapOrigin;
+    public float elevationMapScale = 1.0f;
+    public int octaves = 3;
+    public float exp = 1f;
+    public float persistence = 0.5f;
+    public float frequencyBase = 2f;
 
-    private Texture2D randomTexture;
+    [Header("Tectonic Map")]
+    public SpriteRenderer tectonicMapRenderer;
+    public Vector2 tectonicMapOrigin;
+    public float tectonicMapScale = 1.0f;
+
+    [Header("Moisture Map")]
+    public SpriteRenderer moistureMapRenderer;
+    public Vector2 moistureMapOrigin;
+    public float moistureMapScale = 1.0f;
+
+    [Header("Climate Map")]
+    public SpriteRenderer climateMapRenderer;
+    public float climateZone = 0.2f;
+
+    [Header("Combined Map")]
+    public SpriteRenderer combinedRenderer;
+
+    private Texture2D elevationMapTexture;
+    private Texture2D tectonicMapTexture;
+    private Texture2D moistureMapTexture;
+    private Texture2D climateMapTexture;
+    private Texture2D combinedTexture;
 
     [ContextMenu("Generate Random Texture")]
     public void GenerateRandomTexture()
     {
-        // Create a new Texture2D with specified width and height
-        randomTexture = new Texture2D(width, height);
+        elevationMapTexture = new Texture2D(width, height);
+
+        var elevationMap = new float[width, height];
+        
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                float xCoord = elevationMapOrigin.x + (float)x / width * elevationMapScale;
+                float yCoord = elevationMapOrigin.y + (float)y / height * elevationMapScale;
+                
+                // Octaves
+                var total = 0f;
+                var frequency = 1f;
+                var amplitude = 1f;
+                var maxValue = 0f;
+                for (int i = 0; i < octaves; i++)
+                {
+                    total += Mathf.PerlinNoise(xCoord * frequency, yCoord * frequency) * amplitude;
+
+                    maxValue += amplitude;
+                    amplitude *= persistence;
+                    frequency *= frequencyBase;
+                }
+                float noise = Mathf.Pow(total / maxValue, exp);
+
+                elevationMap[x, y] = noise;
+                var color = Color.white;
+                if (noise > 0.7f)
+                {
+                    color = Color.grey;
+                }
+                else if (noise > 0.5f)
+                {
+                    color = Color.green;
+                }
+                else if (noise > 0.4f)
+                {
+                    color = Color.yellow;
+                }
+                else
+                {
+                    color = Color.blue;
+                }
+                elevationMapTexture.SetPixel(x, y, color);
+            }
+        }
+
+        elevationMapTexture.Apply();
+        var elevationMapSprite = Sprite.Create(elevationMapTexture, new Rect(0.0f, 0.0f, width, height), new Vector2(0.5f, 0.5f));
+        elevationMapSprite.texture.filterMode = FilterMode.Point;
+        elevationMapRenderer.sprite = elevationMapSprite;
+
         var tectonicMap = new bool[width, height];
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
             {
-                float xCoord = x_tOrigin + x / (float)width * scale_t;
-                float yCoord = y_tOrigin + y / (float)height * scale_t;
+                float xCoord = tectonicMapOrigin.x + (float)x / width * tectonicMapScale;
+                float yCoord = tectonicMapOrigin.y + (float)y / height * tectonicMapScale;
                 var noise = Mathf.PerlinNoise(xCoord, yCoord);
                 tectonicMap[x, y] = noise > 0.5f;
-                //randomTexture.SetPixel(x, y, tectonicMap[x, y]? Color.red : Color.black);
+                tectonicMapTexture.SetPixel(x, y, tectonicMap[x, y] ? Color.red : Color.black);
             }
         }
 
-        var moistureMap = new bool[width, height];
-        for (int x = 0; x < width; x++)
-        {
-            for (int y = 0; y < height; y++)
-            {
-                float xCoord = x_mOrigin + x / (float)width * scale_m;
-                float yCoord = y_mOrigin + y / (float)height * scale_m;
-                var noise = Mathf.PerlinNoise(xCoord, yCoord);
-                moistureMap[x, y] = noise > 0.5f;
-                //randomTexture.SetPixel(x, y, moistureMap[x, y] ? Color.blue : Color.black);
-            }
-        }
+        tectonicMapTexture.Apply();
+        var tectonicMapSprite = Sprite.Create(tectonicMapTexture, new Rect(0.0f, 0.0f, width, height), new Vector2(0.5f, 0.5f));
+        tectonicMapSprite.texture.filterMode = FilterMode.Point;
+        tectonicMapRenderer.sprite = tectonicMapSprite;
 
         var climateMap = new bool[width, height];
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
             {
-                climateMap[x, y] = y > 0.8f * height || y < 0.2f * height;
-                //randomTexture.SetPixel(x, y, climateMap[x, y] ? Color.magenta : Color.black);
+                climateMap[x, y] = y > (1 - climateZone) * height || y < climateZone * height;
+                climateMapTexture.SetPixel(x, y, climateMap[x, y] ? Color.magenta : Color.black);
             }
         }
 
-        for (int x = 0; x < randomTexture.width; x++)
+        climateMapTexture.Apply();
+        var climateMapSprite = Sprite.Create(climateMapTexture, new Rect(0.0f, 0.0f, width, height), new Vector2(0.5f, 0.5f));
+        climateMapSprite.texture.filterMode = FilterMode.Point;
+        climateMapRenderer.sprite = climateMapSprite;
+
+        var moistureMap = new bool[width, height];
+        for (int x = 0; x < width; x++)
         {
-            for (int y = 0; y < randomTexture.height; y++)
+            for (int y = 0; y < height; y++)
             {
-                float xCoord = xOrigin + x / (float)width * scale;
-                float yCoord = yOrigin + y / (float)height * scale;
+                float xCoord = moistureMapOrigin.x + (float)x / width * moistureMapScale;
+                float yCoord = moistureMapOrigin.y + (float)y / height * moistureMapScale;
                 var noise = Mathf.PerlinNoise(xCoord, yCoord);
+                moistureMap[x, y] = noise > 0.5f;
+                moistureMapTexture.SetPixel(x, y, moistureMap[x, y] ? Color.blue : Color.black);
+            }
+        }
+
+        moistureMapTexture.Apply();
+        var moistureMapSprite = Sprite.Create(moistureMapTexture, new Rect(0.0f, 0.0f, width, height), new Vector2(0.5f, 0.5f));
+        moistureMapSprite.texture.filterMode = FilterMode.Point;
+        moistureMapRenderer.sprite = moistureMapSprite;
+
+        for (int x = 0; x < combinedTexture.width; x++)
+        {
+            for (int y = 0; y < combinedTexture.height; y++)
+            {
+                var noise = elevationMap[x, y];
                 var color = Color.white;
                 if (tectonicMap[x, y])
                 {
@@ -93,23 +195,30 @@ public class PerlinNoiseTest : MonoBehaviour
                 {
                     color = Color.blue;
                 }
-                
-                randomTexture.SetPixel(x, y, color);
+
+                combinedTexture.SetPixel(x, y, color);
             }
         }
 
-        randomTexture.Apply();
-        var sprite = Sprite.Create(randomTexture, new Rect(0.0f, 0.0f, width, height), new Vector2(0.5f, 0.5f));
-        sprite.texture.filterMode = FilterMode.Point;
-
-        GetComponent<SpriteRenderer>().sprite = sprite;
+        combinedTexture.Apply();
+        var combinedSprite = Sprite.Create(combinedTexture, new Rect(0.0f, 0.0f, width, height), new Vector2(0.5f, 0.5f));
+        combinedSprite.texture.filterMode = FilterMode.Point;
+        combinedRenderer.sprite = combinedSprite;
     }
 
-    public void SaveTextureAsPNG()
+    public void ExportMaps()
     {
-        var texture = GetComponent<SpriteRenderer>().sprite.texture;
+        SaveTextureAsPNG(combinedTexture, "combined");
+        SaveTextureAsPNG(moistureMapTexture, "moisture");
+        SaveTextureAsPNG(climateMapTexture, "climate");
+        SaveTextureAsPNG(elevationMapTexture, "elevation");
+        SaveTextureAsPNG(tectonicMapTexture, "tectonic");
+    }
+
+    public void SaveTextureAsPNG(Texture2D texture, string name)
+    {
         byte[] bytes = texture.EncodeToPNG();
-        var path = Path.Combine(Application.dataPath, $"Texture/texture-{Random.Range(0, 10000)}.png");
+        var path = Path.Combine(Application.dataPath, $"Texture/{name}-{Random.Range(0, 10000)}.png");
         Directory.CreateDirectory(Path.GetDirectoryName(path));
         File.WriteAllBytes(path, bytes);
         Debug.Log("Texture saved as PNG at " + path);
